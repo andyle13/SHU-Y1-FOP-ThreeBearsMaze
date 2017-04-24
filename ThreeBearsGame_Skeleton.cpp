@@ -31,9 +31,11 @@ const int  SIZEX(16);    	//horizontal dimension
 const int  SIZEY(11);		//vertical dimension
 //defining symbols used for display of the grid and content
 const char BEAR('@');   	//bear
+const char PROTECTEDBEAR('£');
 const char TUNNEL(' ');    	//tunnel
 const char WALL('#');    	//border
 const char BOMB('0');		//bomb
+const char PILL('P');		//pill
 const char DETONATOR('T');	//detonator
 const char LOCK('&');
 const char KEY('F');
@@ -51,6 +53,7 @@ const char CHEAT('C');		//disable bombs
 struct Item {
 	int x, y;
 	char symbol;
+	bool isProtected;
 };
 
 //---------------------------------------------------------------------------
@@ -60,8 +63,8 @@ struct Item {
 int main() {
 	//function declarations (prototypes)
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
-	void initialiseGame(char g[][SIZEX], char m[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks, int level);
-	void paintGame(const char g[][SIZEX], string mess, string name, int scoreMove, int rescued, int previousScore, int level);
+	void initialiseGame(char g[][SIZEX], char m[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, int level);
+	void paintGame(const char g[][SIZEX], string mess, string name, int scoreMove, int rescued, int previousScore, int level, const vector<Item>& bears);
 	bool wantsToQuit(const int key);
 	bool enableCheatMode(const int key);
 	bool isArrowKey(const int k);
@@ -69,8 +72,8 @@ int main() {
 	void entryScreen(string, string&);
 	void levelSelection(string, string, string&, int&, int&, bool&);
 	void sortBears(vector<Item>& bears, const int key, const int rescued);
-	void updateGameData(char g[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level);
-	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> locks);
+	void updateGameData(char g[][SIZEX], char maze[][SIZEX], int, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level);
+	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks);
 	void readScoreTxt(string, string, int&);
 	void recordPlayerTxt(string, string, int, int, int);
 	void resetStats(vector<Item>& bombs, vector<Item>& locks, int& scoreMove, int& rescued);
@@ -81,12 +84,15 @@ int main() {
 	HANDLE  hconsole;
 	hconsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
+	//Reset the random function
+	srand(time(NULL));
+
 	//local variable declarations
 	bool finishGame = false;
 	bool levelCompleted = false;
 	bool cheatMode = false;
 	bool unlockMode = false;
-	int level(1), scoreMove(0), rescued(0), previousScore(500), levelRecord(level);
+	int level(1), scoreMove(0), rescued(0), moves(0), previousScore(500), levelRecord(level);
 	char grid[SIZEY][SIZEX];	//grid for display
 	char maze[SIZEY][SIZEX];	//structure of the maze
 	Item bear = { 0, 0, BEAR }; //bear's position and symbol
@@ -97,6 +103,7 @@ int main() {
 	string levelString = to_string(level);
 	vector<Item> bears;
 	vector<Item> bombs;
+	vector<Item> pills;
 	vector<Item> locks;
 	vector<Item> rocks;
 
@@ -104,8 +111,8 @@ int main() {
 	entryScreen(message, playerName);
 	levelSelection(message, playerName, levelString, level, levelRecord, unlockMode);
 	readScoreTxt(playerName, levelString, previousScore);
-	initialiseGame(grid, maze, bears, bombs, locks, rocks, level);	//initialise grid (incl. walls & bear)
-	paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level);			//display game info, modified grid & messages
+	initialiseGame(grid, maze, bears, bombs, pills, locks, rocks, level);	//initialise grid (incl. walls & bear)
+	paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);			//display game info, modified grid & messages
 	showMessage(clBlack, clWhite, 40, 8, "LET'S START!          ");
 	int key(getKeyPress()); 			//read in  selected key: arrow or letter command
 	while ((!wantsToQuit(key)) && (finishGame == false)) {
@@ -114,7 +121,8 @@ int main() {
 		{
 			sortBears(bears, key, rescued);
 			scoreMove++;
-			updateGameData(grid, maze, bears, bombs, locks, rocks, key, message, finishGame, levelCompleted, cheatMode, rescued, level);		//move bear in that direction
+			moves++;
+			updateGameData(grid, maze, moves, bears, bombs, pills, locks, rocks, key, message, finishGame, levelCompleted, cheatMode, rescued, level);		//move bear in that direction
 			//updateGrid(grid, maze, bears, bombs);			//update grid information - disabled for testing, updateGrid exist in updateGameData
 		}
 		else{
@@ -140,7 +148,7 @@ int main() {
 			}
 			message = "                     ";
 		}
-		paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level);	//display game info, modified grid & messages
+		paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	//display game info, modified grid & messages
 		key = getKeyPress(); 		// display menu & read in next option
 
 		// initialise the next level
@@ -160,8 +168,8 @@ int main() {
 			level++;	// increment the level count
 			levelString = to_string(level);	// create a string version of the level count for the filename
 			readScoreTxt(playerName, levelString, previousScore);	// read the player's highest score of the next level
-			initialiseGame(grid, maze, bears, bombs, locks, rocks, level);	// reinitialise the game with the next level
-			paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level);	// update the next level's descriptions
+			initialiseGame(grid, maze, bears, bombs, pills, locks, rocks, level);	// reinitialise the game with the next level
+			paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	// update the next level's descriptions
 		}
 	}
 
@@ -268,13 +276,13 @@ void levelSelection(string message, string playerName, string& levelString, int&
 //----- initialise game state
 //---------------------------------------------------------------------------
 
-void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks, int level) {
+void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, int level) {
 	//initialise grid & place bear in middle
 	void setInitialMazeStructure(char maze[][SIZEX]);
 	void setMazeStructureLevel2(char maze[][SIZEX]);
 	void setMazeStructureLevel3(char maze[][SIZEX]);
 	void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks);
-	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> locks, const vector<Item> rocks);
+	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks, const vector<Item> rocks);
 
 	// draw the maze dependent on the level count
 	switch (level)
@@ -292,7 +300,7 @@ void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears,
 		break;
 	}
 	setInitialDataFromMaze(maze, bears, bombs, locks, rocks);	//initialise bear's position
-	updateGrid(grid, maze, bears, bombs, locks, rocks);		//prepare grid
+	updateGrid(grid, maze, bears, bombs, pills, locks, rocks);		//prepare grid
 }
 
 void setInitialMazeStructure(char maze[][SIZEX]) {
@@ -403,7 +411,7 @@ void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item
 			{
 				case BEAR:
 				{
-					Item bear = { col, row, BEAR };
+					Item bear = { col, row, BEAR, false };
 					bears.push_back(bear);
 					maze[row][col] = TUNNEL;
 					break;
@@ -441,16 +449,16 @@ void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item
 //----- update grid state
 //---------------------------------------------------------------------------
 
-void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> locks, const vector<Item> rocks) {
+void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks, const vector<Item> rocks) {
 	//update grid configuration after each move
 	void setMaze(char g[][SIZEX], const char b[][SIZEX]);
-	void placeBombs(char g[][SIZEX], const vector<Item>& bombs);
+	void placeBombs(char g[][SIZEX], const vector<Item>& bombs, const vector<Item>& pills);
 	void placeLocks(char g[][SIZEX], const vector<Item>& locks);
 	void placeRocks(char g[][SIZEX], const vector<Item>& rocks);
 	void placeBears(char g[][SIZEX], const vector<Item>& bears);
 
 	setMaze(grid, maze);	//reset the empty maze configuration into grid
-	placeBombs(grid, bombs);	// set bombs in grid - remove them if they're deleted
+	placeBombs(grid, bombs, pills);	// set bombs in grid - remove them if they're deleted
 	placeLocks(grid, locks);	// set lock in grid - remove it if deleted
 	placeRocks(grid, rocks);	// set rocks in grid
 	placeBears(grid, bears);	// set bears in grid
@@ -472,10 +480,16 @@ void placeBears(char grid[][SIZEX], const vector<Item>& bears) {
 	}
 }
 
-void placeBombs(char grid[][SIZEX], const vector<Item>& bombs) {
+void placeBombs(char grid[][SIZEX], const vector<Item>& bombs, const vector<Item>& pills) {
 	for (size_t pos(0); pos < bombs.size(); ++pos)
 	{
 		grid[bombs.at(pos).y][bombs.at(pos).x] = bombs.at(pos).symbol;
+	}
+
+	for (size_t pos(0); pos < pills.size(); ++pos)
+	{
+		grid[pills.at(pos).y][pills.at(pos).x] = pills.at(pos).symbol;
+
 	}
 }
 
@@ -496,16 +510,24 @@ void placeRocks(char grid[][SIZEX], const vector<Item>& rocks) {
 //---------------------------------------------------------------------------
 //----- move the bear
 //---------------------------------------------------------------------------
-void updateGameData(char g[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level) {
+void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level) {
 	//move bear in required direction
 	bool isArrowKey(const int k);
 	void setKeyDirection(int k, int& dx, int& dy);
+	void createThePill(char g[][SIZEX], const int, vector<Item>& pills);
+	void paintGrid(const char g[][SIZEX], const vector<Item>& bears);
 	assert(isArrowKey(key));
 
 	//calculate direction of movement for given key
 	int dx(0), dy(0);
 	bool steppedOnBomb = false;
 	setKeyDirection(key, dx, dy);
+
+	if (moves % 10 == 0){
+		pills.clear();
+		createThePill(g, moves, pills);
+		moves = 0;
+	}
 
 	for (size_t pos(0); pos < bears.size(); ++pos) {
 		//check new target position in grid and update game data (incl. bear coordinates) if move is possible
@@ -524,7 +546,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], vector<Item>& bears, ve
 				bears.at(pos).x += 0;	//go in that X direction
 				break;
 			case BOMB:			//hit a bomb and the bear disappears and the game ends
-				if (!cheatMode) {
+				if (!cheatMode && !bears.at(pos).isProtected) {
 					cout << '\a';		//beep the alarm
 					mess = "BEAR DIES!                           ";
 					steppedOnBomb = true;
@@ -559,6 +581,13 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], vector<Item>& bears, ve
 				rocks.at(pos).x += dx;	//go in that X direction
 				mess = "                                     ";
 				break;
+			case PILL:
+				bears.at(pos).isProtected = true;
+				bears.at(pos).y += dy;
+				bears.at(pos).x += dx;
+				bears.at(pos).symbol = PROTECTEDBEAR;
+				pills.clear();
+				break;
 			case EXIT:
 				cout << '\a';		//beep the alarm
 				rescued++;
@@ -576,8 +605,28 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], vector<Item>& bears, ve
 					}
 				}
 		}
-		updateGrid(g, maze, bears, bombs, locks, rocks);
+		updateGrid(g, maze, bears, bombs, pills, locks, rocks);
 	}
+}
+
+void createThePill(char g[][SIZEX], const int moves, vector<Item>& pills) {
+
+	int col = rand() % 16 + 1;
+	int row = rand() % 11 + 1;
+
+	while (pills.empty())
+	{
+		if (g[row][col] == TUNNEL){
+			Item pill = { col, row, PILL };
+			pills.push_back(pill);
+			g[row][col] = PILL;
+		}
+		else{
+			col = rand() % 16 + 1;
+			row = rand() % 11 + 1;
+		}
+	}
+
 }
 //---------------------------------------------------------------------------
 //----- process key
@@ -642,12 +691,12 @@ string tostring(char x) {
 	return os.str();
 }
 
-void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreMove, int rescued, int previousScore, int level) {
+void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreMove, int rescued, int previousScore, int level, const vector<Item>& bears) {
 	//display game title, messages, maze, bear and other bombs on screen
 	string tostring(char x);
 	string prevScore = to_string(previousScore);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
-	void paintGrid(const char g[][SIZEX]);
+	void paintGrid(const char g[][SIZEX], const vector<Item>& bears);
 
 	// retrieve current time and date.
 	auto t = time(nullptr);
@@ -727,7 +776,7 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	showMessage(clBlack, clWhite, 40, 8, mess);	//display current message
 
 	// display grid contents
-	paintGrid(g);
+	paintGrid(g, bears);
 
 	//´symbol description
 	showMessage(clDarkGrey, clWhite, 0, 16, "BEAR         ");
@@ -763,12 +812,14 @@ void showMessage(const WORD backColour, const WORD textColour, int x, int y, con
 	cout << message;
 }
 
-void paintGrid(const char g[][SIZEX]) { 
+void paintGrid(const char g[][SIZEX], const vector<Item>& bears) {
 	//display grid content on screen
 	void setColor(int);
 	void resetColor();
 
 	Gotoxy(0, 4);
+
+	int pos(0);
 
 	// Paint the whole Grid, item by item
 	for (int row(0); row < SIZEY; ++row) {
@@ -785,6 +836,11 @@ void paintGrid(const char g[][SIZEX]) {
 				resetColor();			// Reset the colour back to white
 				break;
 			}
+			case PROTECTEDBEAR:
+				setColor(2);
+				cout << BEAR;
+				resetColor();
+				break;
 			case BOMB:
 			{
 				setColor(12);			// Paint the Bomb red
@@ -799,6 +855,11 @@ void paintGrid(const char g[][SIZEX]) {
 				resetColor();			// Reset the colour back to white
 				break;
 			}
+			case PILL:
+				setColor(11);
+				cout << g[row][col];
+				resetColor();
+				break;
 			case LOCK:
 			{
 				setColor(11);			// Paint the Detonator cyan
