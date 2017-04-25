@@ -186,18 +186,18 @@ void entryScreen(string message, string& playerName) {
 
 	//display game title and bear image
 	showMessage(clDarkGrey, clGreen, 15, 2, "	   _      _                                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  ");
-	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /                                  /| ");
+	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /              MENU                /| ");
 	showMessage(clDarkGrey, clGreen, 15, 4, "   .'      `.      _..--'''       `-._     /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _/ | ");
 	showMessage(clDarkGrey, clGreen, 15, 5, "  :          :_.-''                  .`.   |                                 |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |     THREE  BEARS  GAME - FOP    |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |            GROUP RR             |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |       Greg, Andy and Irek       |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 9, "    `._Y _.'               '           ;   |      Computer Science - 2017    | /  ");
-	showMessage(clDarkGrey, clGreen, 15, 10, "      'U'      .'          `.         ;    |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
-	showMessage(clDarkGrey, clGreen, 15, 11, "         `:   ;`-..___       `.     .'`.                    ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 12, "          :   :  :    ```'''''``.    `.  `.                 ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 13, "       .'     ;..'            .'       `.'`                 ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 14, "      `.......'              `........-'`                   ||                    ");
+	showMessage(clDarkGrey, clGreen, 15, 10, "       'U'      .'          `.         ;   |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
+	showMessage(clDarkGrey, clGreen, 15, 11, "          `:   ;`-..___       `.     .'`.                    ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 12, "           :   :  :    ```'''''``.    `.  `.                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 13, "        .'     ;..'            .'       `.'`                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 14, "       `.......'              `........-'`                   ||                   ");
 
 	showMessage(clBlack, clWhite, 55, 18, "______________________");
 
@@ -224,18 +224,18 @@ void levelSelection(string message, string playerName, string& levelString, int&
 
 	// display available levels and bear image
 	showMessage(clDarkGrey, clGreen, 15, 2, "	   _      _                                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  ");
-	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /                                  /| ");
+	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /              MENU                /| ");
 	showMessage(clDarkGrey, clGreen, 15, 4, "   .'      `.      _..--'''       `-._     /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _/ | ");
 	showMessage(clDarkGrey, clGreen, 15, 5, "  :          :_.-''                  .`.   |                                 |  | ");
-	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |  1 - Maze with detonator        |  | ");
+	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |       1. Maze with detonator    |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |                                 |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |                                 |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 9, "    `._Y _.'               '           ;   |                                 | /  ");
-	showMessage(clDarkGrey, clGreen, 15, 10, "      'U'      .'          `.         ;    |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
-	showMessage(clDarkGrey, clGreen, 15, 11, "         `:   ;`-..___       `.     .'`.                    ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 12, "          :   :  :    ```'''''``.    `.  `.                 ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 13, "       .'     ;..'            .'       `.'`                 ||                    ");
-	showMessage(clDarkGrey, clGreen, 15, 14, "      `.......'              `........-'`                   ||                    ");
+	showMessage(clDarkGrey, clGreen, 15, 10, "       'U'      .'          `.         ;   |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
+	showMessage(clDarkGrey, clGreen, 15, 11, "          `:   ;`-..___       `.     .'`.                    ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 12, "           :   :  :    ```'''''``.    `.  `.                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 13, "        .'     ;..'            .'       `.'`                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 14, "       `.......'              `........-'`                   ||                   ");
 
 	// display the level options if unlocked
 	hiddenLevels(levelRecord);
@@ -693,6 +693,8 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	string prevScore = to_string(previousScore);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
 	void paintGrid(const char g[][SIZEX], const vector<Item>& bears);
+	void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears);
+
 
 	// retrieve current time and date.
 	auto t = time(nullptr);
@@ -887,6 +889,83 @@ void paintGrid(const char g[][SIZEX], const vector<Item>& bears) {
 				cout << g[row][col];
 				break;
 			}
+		}
+		cout << endl;
+	}
+}
+
+void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears) {
+	//display grid content on screen
+	void setColor(int);
+	void resetColor();
+	bool visible(false);
+
+	Gotoxy(0, 4);
+
+	int pos(0);
+
+	// Paint the whole Grid, item by item
+	for (int row(0); row < SIZEY; ++row) {
+		for (int col(0); col < SIZEX; ++col) {
+			SelectBackColour(clBlack);	//	Sets the background colour to black
+			SelectTextColour(clWhite);	//	Sets the walls colour to white
+
+			int pos(0);
+			while ((pos < bears.size()) && (visible == false))
+			{
+				if ((row > bears.at(pos).y - 2 && row < bears.at(pos).y + 2) && (col > bears.at(pos).x - 2 && col < bears.at(pos).x + 2))
+				{
+					visible = true;
+				}
+				else
+				{
+					visible = false;
+				}
+				pos++;
+			}
+
+			if (visible == true)
+			{
+				switch (g[row][col])		//	Looks for special characters and paint them for chosen colours
+				{
+				case BEAR:
+				{
+					setColor(10);			// Paint the Bear green
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case BOMB:
+				{
+					setColor(12);			// Paint the Bomb red
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case DETONATOR:
+				{
+					setColor(14);			// Paint the Detonator yellow
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case EXIT:
+					SelectBackColour(clWhite);
+					SelectTextColour(clBlack);
+					cout << g[row][col];
+					break;
+				default:
+					cout << g[row][col];
+					break;
+				}
+			}
+			else
+			{
+				setColor(1);
+				cout << g[row][col];
+				resetColor();
+			}
+			visible = false;
 		}
 		cout << endl;
 	}
