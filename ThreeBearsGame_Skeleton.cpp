@@ -95,9 +95,6 @@ int main() {
 	int level(1), scoreMove(0), rescued(0), moves(0), previousScore(500), levelRecord(level);
 	char grid[SIZEY][SIZEX];	//grid for display
 	char maze[SIZEY][SIZEX];	//structure of the maze
-	Item bear = { 0, 0, BEAR }; //bear's position and symbol
-	Item bomb = { 0, 0, BOMB }; //bomb's position and symbol
-	Item lock = { 0, 0, LOCK }; //lock's position and symbol
 	string message;	//current message to player
 	string playerName;
 	string levelString = to_string(level);
@@ -539,7 +536,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				mess = "                                     ";
 				break;
 			case WALL:  		//hit a wall and stay there
-				//cout << '\a';	//beep the alarm - Disabled as the alarm is annoying
+				cout << '\a';	//beep the alarm - Disabled as the alarm is annoying
 				break;
 			case BEAR:
 				bears.at(pos).y += 0;	//go in that Y direction
@@ -580,7 +577,6 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				rocks.at(pos).y += dy;	//go in that Y direction
 				rocks.at(pos).x += dx;	//go in that X direction
 				mess = "                                     ";
-				break;
 			case PILL:
 				bears.at(pos).isProtected = true;
 				bears.at(pos).y += dy;
