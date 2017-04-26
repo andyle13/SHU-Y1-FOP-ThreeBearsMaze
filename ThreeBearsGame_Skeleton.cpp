@@ -17,6 +17,8 @@
 #include <sstream>
 #include <vector>
 #include <fstream>
+#include <windows.h>		// Required for the sound commands to work
+#include <MMSystem.h>		// As above, required for the sound command
 using namespace std;
 
 //include our own libraries
@@ -143,6 +145,7 @@ int main() {
 				if (enableCheatMode(key)) {
 					if (cheatMode == false) {
 						cheatMode = true;
+						PlaySound("cheat.wav", NULL, SND_ASYNC | SND_FILENAME | SND_LOOP);
 						scoreMove = 500;
 						showMessage(clBlack, clWhite, 40, 7, "CHEAT MODE ACTIVATED!");
 						showMessage(clBlack, clWhite, 40, 8, "Bombs Deactivated!   ");
@@ -153,6 +156,7 @@ int main() {
 					}
 					else {
 						cheatMode = false;
+						PlaySound(NULL, NULL, NULL);
 						showMessage(clBlack, clBlack, 40, 7, "                     ");
 						showMessage(clBlack, clBlack, 40, 8, "                     ");
 					}
@@ -191,16 +195,28 @@ int main() {
 				paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	// update the next level's descriptions
 			}
 		}
+		PlaySound(NULL, NULL, NULL);
+
 		endProgram(finishGame, bears);	//display final message
 		Clrscr();
+
+		if (finishGame == true) {
+			finishGame = false;
+			moves = 0;
+			scoreMove = 0;
+			level = 1;
+			levelString = to_string(level);
+		}
+
 		mainMenu(moves, message, playerName, levelString, level, levelRecord, unlockMode, key);
+
 		// record the player's highest record after game completion
 		if ((scoreMove <= previousScore) && (finishGame == true) && (unlockMode == false) && (bears.empty())) {
 			recordPlayerTxt(playerName, levelString, scoreMove, level, levelRecord);
 		}
 
 		// save current playthrough
-		if (key == 4) {
+		if ((key == 4) && (finishGame == false)) {
 			saveGame(grid, playerName, level, scoreMove, rescued, onBomb, onWal);
 		}
 	} while (key != 4);
@@ -268,7 +284,7 @@ void levelSelection(string message, string playerName, string& levelString, int&
 	// unlock all levels if the "u" button has been pressed
 	if (levelString == "u") {
 		unlockMode = true;	// prevent file recording
-		levelRecord = 3;	// unlock all levels in unlock mode
+		levelRecord = 4;	// unlock all levels in unlock mode
 		displayLevels(levelRecord);	// display all levels in unlock mode
 		showMessage(clBlack, clWhite, 40, 19, "All levels unlocked. Choose a level.");
 		Beep(523, 200);		// Beep sounds when cheatmode activated
@@ -301,6 +317,7 @@ void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears,
 	void setInitialMazeStructure(char maze[][SIZEX]);
 	void setMazeStructureLevel2(char maze[][SIZEX]);
 	void setMazeStructureLevel3(char maze[][SIZEX]);
+	void setMazeStructureLevel4(char maze[][SIZEX]);
 	void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, bool, bool);
 	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks);
 	bool readSave(string);
@@ -322,6 +339,9 @@ void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears,
 			break;
 		case 3:
 			setMazeStructureLevel3(maze);		//Level 3
+			break;
+		case 4:
+			setMazeStructureLevel4(maze);		//Level 4
 			break;
 		default:
 			break;
@@ -403,6 +423,38 @@ void setMazeStructureLevel3(char maze[][SIZEX]) {
 	//set the position of the walls in the maze
 	//initialise maze configuration
 	int maze3[SIZEY][SIZEX] 	//local array to store the maze structure
+		= { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1 },
+		{ 1, 0, 0, 0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1 },
+		{ 1, 3, 0, 0, 3, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 2, 0, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1 },
+		{ 1, 3, 0, 0, 3, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1 },
+		{ 1, 0, 0, 0, 0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 3, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1 },
+		{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, };
+
+	// with 1 for wall, 0 for tunnel, etc. 
+	//copy into maze structure
+	for (int row(0); row < SIZEY; ++row) {
+		for (int col(0); col < SIZEX; ++col) {
+			switch (maze3[row][col])
+			{
+			case 0: maze[row][col] = TUNNEL; break;
+			case 1: maze[row][col] = WALL; break;
+			case 2: maze[row][col] = BEAR; break;
+			case 3: maze[row][col] = BOMB; break;
+			case 5:	maze[row][col] = EXIT; break;
+			}
+		}
+	}
+}
+
+void setMazeStructureLevel4(char maze[][SIZEX]) {
+	//set the position of the walls in the maze
+	//initialise maze configuration
+	int maze4[SIZEY][SIZEX] 	//local array to store the maze structure
 	= { { 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1, 1 },
 		{ 1, 2, 0, 0, 0, 3, 0,  0, 0, 9, 0, 0, 0, 0, 0, 1 },
 		{ 1, 2, 9, 0, 9, 9, 0,  9, 0, 9, 0, 3, 3, 3, 0, 1 },
@@ -419,7 +471,7 @@ void setMazeStructureLevel3(char maze[][SIZEX]) {
 	//copy into maze structure
 	for (int row(0); row < SIZEY; ++row) {
 		for (int col(0); col < SIZEX; ++col) {
-			switch (maze3[row][col])
+			switch (maze4[row][col])
 			{
 			case 0: maze[row][col] = TUNNEL; break;
 			case 1: maze[row][col] = WALL; break;
@@ -572,7 +624,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 		{			//...depending on what's on the target position in grid...
 			case TUNNEL:		//can move
 				bears.at(pos).y += dy;	//go in that Y direction
-				bears.at(pos).x += dx;	//go in that X direction
+				bears.at(pos).x += dx;	//go exitin that X direction
 				onBomb = false;
 				onWal = false;
 				mess = "                                     ";
@@ -598,6 +650,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				if (!cheatMode && !bears.at(pos).isProtected) {
 					cout << '\a';		//beep the alarm
 					mess = "BEAR DIES!                           ";
+					PlaySound("bomb.wav", NULL, SND_ASYNC | SND_FILENAME);
 					onBomb = true;
 					bears.at(pos).symbol = ' ';
 					finishGame = true;
@@ -609,6 +662,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 					break;
 				}
 			case DETONATOR:
+				PlaySound("detonator.wav", NULL, SND_ASYNC | SND_FILENAME);
 				bears.at(pos).y += dy;	//go in that Y direction
 				bears.at(pos).x += dx;	//go in that X direction	
 				if (cheatMode == false)
@@ -624,6 +678,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				mess = "LOCK REMOVED!        ";	//set 'Invalid key' message
 				break;
 			case PILL:
+				PlaySound("pill.wav", NULL, SND_ASYNC | SND_FILENAME);
 				bears.at(pos).isProtected = true;
 				bears.at(pos).y += dy;
 				bears.at(pos).x += dx;
@@ -646,8 +701,9 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 					bears.clear();
 				}
 				if (bears.empty() == true) {
-					if (level != 3) {
+					if (level != 4) {
 						levelCompleted = true;
+						PlaySound("exit.wav", NULL, SND_ASYNC | SND_FILENAME);
 					}
 					else {
 						finishGame = true;	// confirms the game's completion
@@ -809,6 +865,12 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	cout << scoreMove;
 	showMessage(clBlack, clWhite, 40, 6, "BEARS OUT: ");
 	cout << rescued;
+	showMessage(clDarkGrey, clYellow, 40, 17, "For help press 'R'");
+	showMessage(clDarkGrey, clYellow, 40, 18, "To activate cheat mode, press 'C'");
+	showMessage(clDarkGrey, clYellow, 40, 19, "To return to main menu, press 'Q'");
+
+
+
 
 	//Print current level
 	string currentLevelDisplay = "Current level: " + to_string(level);
@@ -825,7 +887,7 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 		paintGrid(g, bears);
 	}
 
-	//´symbol description
+	// symbol description
 	showMessage(clBlack, clWhite, 0, 16, "BEAR         ");
 	showMessage(clBlack, clGreen, 10, 16, "@     ");
 	showMessage(clBlack, clWhite, 0, 17, "BOMB          ");
@@ -833,16 +895,28 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	showMessage(clBlack, clWhite, 0, 18, "DETONATOR      ");
 	showMessage(clBlack, clYellow, 10, 18, "T     ");
 	showMessage(clBlack, clWhite, 0, 19, "EXIT         ");
-	showMessage(clBlack, clBlack, 10, 19, "X     ");
+	showMessage(clBlack, clWhite, 10, 19, "X     ");
 	if (level == 2) {
 		showMessage(clBlack, clWhite, 0, 18, "KEY            ");
 		showMessage(clBlack, clCyan, 10, 18, "F     ");
 		showMessage(clBlack, clWhite, 0, 19, "LOCK         ");
 		showMessage(clBlack, clCyan, 10, 19, "&     ");
 		showMessage(clBlack, clWhite, 0, 20, "EXIT         ");
-		showMessage(clBlack, clBlack, 10, 20, "X     ");
+		showMessage(clBlack, clWhite, 10, 20, "X     ");
 	}
 	else if (level == 3) {
+		showMessage(clBlack, clWhite, 0, 16, "BEAR         ");
+		showMessage(clBlack, clGreen, 10, 16, "@     ");
+		showMessage(clBlack, clWhite, 0, 17, "BOMB          ");
+		showMessage(clBlack, clRed, 10, 17, "0     ");
+		showMessage(clBlack, clWhite, 0, 18, "DETONATOR      ");
+		showMessage(clBlack, clYellow, 10, 18, "T     ");
+		showMessage(clBlack, clWhite, 0, 19, "EXIT         ");
+		showMessage(clBlack, clWhite, 10, 19, "X     ");
+		showMessage(clBlack, clWhite, 0, 20, "             ");
+		showMessage(clBlack, clBlack, 10, 20, "      ");
+	}
+	else if (level == 4) {
 		showMessage(clBlack, clWhite, 0, 19, "KEY            ");
 		showMessage(clBlack, clCyan, 10, 19, "F     ");
 		showMessage(clBlack, clWhite, 0, 20, "LOCK         ");
@@ -852,7 +926,7 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 		showMessage(clBlack, clWhite, 0, 22, "PILL         ");
 		showMessage(clBlack, clCyan, 10, 22, "P     ");
 		showMessage(clBlack, clWhite, 0, 23, "EXIT         ");
-		showMessage(clBlack, clBlack, 10, 23, "X     ");
+		showMessage(clBlack, clWhite, 10, 23, "X     ");
 	}
 }
 
@@ -1125,7 +1199,11 @@ void floatRules(int level) {
 		break;
 	case 3:
 		showMessage(clDarkBlue, clWhite, 13, 5, "          LEVEL 3 RULES: ");
-		showMessage(clDarkBlue, clWhite, 13, 7, " Move rock 'O' to reach the exit ");
+		showMessage(clDarkBlue, clWhite, 13, 7, "Find the exit without seeing much");
+		break;
+	case 4:
+		showMessage(clDarkBlue, clWhite, 13, 5, "          LEVEL 4 RULES: ");
+		showMessage(clDarkBlue, clWhite, 13, 7, "Use key, detonate bombs, drill walls");
 		break;
 	}
 	showMessage(clDarkBlue, clWhite, 13, 9, " Rescue all the bears '@' through");
@@ -1232,7 +1310,7 @@ void mainMenu(int moves, string message, string playerName, string& levelString,
 				cin >> num;
 
 				while (((num < '1') || (num > '4')) && ((num != 'B') && (num != 'b'))) {
-					showMessage(clBlack, clWhite, 40, 18, "                                                 ");
+					showMessage(clBlack, clWhite, 58, 17, "                                                                           ");
 					showMessage(clRed, clYellow, 58, 17, "INVALID COMMAND");
 					showMessage(clBlack, clWhite, 40, 18, "                                                                                                         ");
 					showMessage(clBlack, clWhite, 40, 18, "Choose an option: ");
@@ -1245,6 +1323,7 @@ void mainMenu(int moves, string message, string playerName, string& levelString,
 				else {
 
 				}
+				showMessage(clBlack, clWhite, 58, 17, "                                                                           ");
 
 			} while ((num != 'B') && (num != 'b'));
 			break;
