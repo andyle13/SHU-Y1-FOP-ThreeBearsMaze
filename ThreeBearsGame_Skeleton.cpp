@@ -32,14 +32,16 @@ const int  SIZEY(11);		//vertical dimension
 //defining symbols used for display of the grid and content
 const char BEAR('@');   	//bear
 const char PROTECTEDBEAR('£');
+const char DRILLBEAR('€');
 const char TUNNEL(' ');    	//tunnel
 const char WALL('#');    	//border
+const char WAL('+');		//wall for level 3
 const char BOMB('0');		//bomb
 const char PILL('P');		//pill
+const char DRILL('D');		//drill
 const char DETONATOR('T');	//detonator
 const char LOCK('&');
 const char KEY('F');
-const char ROCK('Q');
 const char EXIT('X');
 //defining the command letters to move the bear on the maze
 const int  UP(72);			//up arrow
@@ -49,11 +51,14 @@ const int  LEFT(75);		//left arrow
 //defining the other command letters
 const char QUIT('Q');		//to end the game
 const char CHEAT('C');		//disable bombs
+const char RULES('R');      //display menu
+const char BACK('B');
 
 struct Item {
 	int x, y;
 	char symbol;
 	bool isProtected;
+	bool drillMode;
 };
 
 //---------------------------------------------------------------------------
@@ -63,20 +68,25 @@ struct Item {
 int main() {
 	//function declarations (prototypes)
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
-	void initialiseGame(char g[][SIZEX], char m[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, int level);
+	void initialiseGame(char g[][SIZEX], char m[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, string playerName, int& level, int& scoreMove, int& rescued, bool& onBomb, bool& onWal);
 	void paintGame(const char g[][SIZEX], string mess, string name, int scoreMove, int rescued, int previousScore, int level, const vector<Item>& bears);
 	bool wantsToQuit(const int key);
 	bool enableCheatMode(const int key);
 	bool isArrowKey(const int k);
+	bool readSave(string);
 	int  getKeyPress();
+	void floatRules(int);
+	void mainMenu(int, string, string, string&, int&, int&, bool&, int&);
+	bool displayRules(const int);
 	void entryScreen(string, string&);
 	void levelSelection(string, string, string&, int&, int&, bool&);
 	void sortBears(vector<Item>& bears, const int key, const int rescued);
-	void updateGameData(char g[][SIZEX], char maze[][SIZEX], int, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level);
+	void updateGameData(char g[][SIZEX], char maze[][SIZEX], int, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool& onBomb, bool& onWal, bool cheatMode, int& rescued, int level, bool& drillMode);
 	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks);
 	void readScoreTxt(string, string, int&);
 	void recordPlayerTxt(string, string, int, int, int);
 	void resetStats(vector<Item>& bombs, vector<Item>& locks, int& scoreMove, int& rescued);
+	void saveGame(char g[][SIZEX], string, int, int, int, bool, bool);
 	void endLevel(string levelString);
 	void endProgram(bool finishGame, vector<Item>& bears);
 
@@ -92,6 +102,10 @@ int main() {
 	bool levelCompleted = false;
 	bool cheatMode = false;
 	bool unlockMode = false;
+	bool drillMode = false;
+	bool onBomb = false;
+	bool onWal = false;
+	int key;
 	int level(1), scoreMove(0), rescued(0), moves(0), previousScore(500), levelRecord(level);
 	char grid[SIZEY][SIZEX];	//grid for display
 	char maze[SIZEY][SIZEX];	//structure of the maze
@@ -102,80 +116,94 @@ int main() {
 	vector<Item> bombs;
 	vector<Item> pills;
 	vector<Item> locks;
-	vector<Item> rocks;
 
 	//action...
 	entryScreen(message, playerName);
-	levelSelection(message, playerName, levelString, level, levelRecord, unlockMode);
-	readScoreTxt(playerName, levelString, previousScore);
-	initialiseGame(grid, maze, bears, bombs, pills, locks, rocks, level);	//initialise grid (incl. walls & bear)
+	mainMenu(moves, message, playerName, levelString, level, levelRecord, unlockMode, key);
+	if (!readSave(playerName)) {
+		levelSelection(message, playerName, levelString, level, levelRecord, unlockMode);
+		readScoreTxt(playerName, levelString, previousScore);
+	}
+	initialiseGame(grid, maze, bears, bombs, pills, locks, playerName, level, scoreMove, rescued, onBomb, onWal);	//initialise grid (incl. walls & bear)
 	paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);			//display game info, modified grid & messages
 	showMessage(clBlack, clWhite, 40, 8, "LET'S START!          ");
-	int key(getKeyPress()); 			//read in  selected key: arrow or letter command
-	while ((!wantsToQuit(key)) && (finishGame == false)) {
-		//while user does not want to quit
-		if (isArrowKey(key))
-		{
-			sortBears(bears, key, rescued);
-			scoreMove++;
-			moves++;
-			updateGameData(grid, maze, moves, bears, bombs, pills, locks, rocks, key, message, finishGame, levelCompleted, cheatMode, rescued, level);		//move bear in that direction
-			//updateGrid(grid, maze, bears, bombs);			//update grid information - disabled for testing, updateGrid exist in updateGameData
-		}
-		else{
-			if (enableCheatMode(key)) {
-				if (cheatMode == false) {
-					cheatMode = true;
-					scoreMove = 500;
-					showMessage(clBlack, clWhite, 40, 7, "CHEAT MODE ACTIVATED!");
-					showMessage(clBlack, clWhite, 40, 8, "Bombs Deactivated!   ");
+	key = getKeyPress(); 			//read in  selected key: arrow or letter command
+	do {
+		while ((!wantsToQuit(key)) && (finishGame == false)) {
+			//while user does not want to quit
+			if (isArrowKey(key))
+			{
+				sortBears(bears, key, rescued);
+				scoreMove++;
+				moves++;
+				updateGameData(grid, maze, moves, bears, bombs, pills, locks, key, message, finishGame, levelCompleted, onBomb, onWal, cheatMode, rescued, level, drillMode);		//move bear in that direction
+				//updateGrid(grid, maze, bears, bombs);			//update grid information - disabled for testing, updateGrid exist in updateGameData
+			}
+			else{
+				if (enableCheatMode(key)) {
+					if (cheatMode == false) {
+						cheatMode = true;
+						scoreMove = 500;
+						showMessage(clBlack, clWhite, 40, 7, "CHEAT MODE ACTIVATED!");
+						showMessage(clBlack, clWhite, 40, 8, "Bombs Deactivated!   ");
 
-					Beep(523, 200);				// Beep sounds when cheatmode activated.
-					Beep(523, 200);				// Beep sounds when cheatmode activated.
-					Beep(523, 200);				// Beep sounds when cheatmode activated.
+						Beep(523, 200);				// Beep sounds when cheatmode activated.
+						Beep(523, 200);				// Beep sounds when cheatmode activated.
+						Beep(523, 200);				// Beep sounds when cheatmode activated.
+					}
+					else {
+						cheatMode = false;
+						showMessage(clBlack, clBlack, 40, 7, "                     ");
+						showMessage(clBlack, clBlack, 40, 8, "                     ");
+					}
 				}
 				else {
-					cheatMode = false;
-					showMessage(clBlack, clBlack, 40, 7, "                     ");
-					showMessage(clBlack, clBlack, 40, 8, "                     ");
+					if (displayRules(key)) {
+						floatRules(level);
+					}
+					else {
+						message = "INVALID KEY!         ";	//set 'Invalid key' message
+					}
 				}
+				message = "                     ";
 			}
-			else {
-				message = "INVALID KEY!         ";	//set 'Invalid key' message
+			paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	//display game info, modified grid & messages
+			key = getKeyPress(); 		// display menu & read in next option
+
+			// initialise the next level
+			if (levelCompleted == true) {
+				levelCompleted = false;	// reset the state of a completed level in the next one
+				cheatMode = false;		// reset cheat mode in the next level
+				showMessage(clBlack, clBlack, 40, 7, "                     ");
+				showMessage(clBlack, clBlack, 40, 8, "                     ");
+
+				// record the player's highest level completion
+				if ((scoreMove <= previousScore) && (unlockMode == false) && (bears.empty())) {
+					recordPlayerTxt(playerName, levelString, scoreMove, level + 1, levelRecord);
+				}
+
+				endLevel(levelString);	// display level completion message
+				resetStats(bombs, locks, scoreMove, rescued);	// reset the scores to 0
+				level++;	// increment the level count
+				levelString = to_string(level);	// create a string version of the level count for the filename
+				readScoreTxt(playerName, levelString, previousScore);	// read the player's highest score of the next level
+				initialiseGame(grid, maze, bears, bombs, pills, locks, playerName, level, scoreMove, rescued, onBomb, onWal);	// reinitialise the game with the next level
+				paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	// update the next level's descriptions
 			}
-			message = "                     ";
 		}
-		paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	//display game info, modified grid & messages
-		key = getKeyPress(); 		// display menu & read in next option
-
-		// initialise the next level
-		if (levelCompleted == true) {
-			levelCompleted = false;	// reset the state of a completed level in the next one
-			cheatMode = false;		// reset cheat mode in the next level
-			showMessage(clBlack, clBlack, 40, 7, "                     ");
-			showMessage(clBlack, clBlack, 40, 8, "                     ");
-
-			// record the player's highest level completion
-			if ((scoreMove <= previousScore) && (unlockMode == false) && (bears.empty())) {
-				recordPlayerTxt(playerName, levelString, scoreMove, level + 1, levelRecord);
-			}
-
-			endLevel(levelString);	// display level completion message
-			resetStats(bombs, locks, scoreMove, rescued);	// reset the scores to 0
-			level++;	// increment the level count
-			levelString = to_string(level);	// create a string version of the level count for the filename
-			readScoreTxt(playerName, levelString, previousScore);	// read the player's highest score of the next level
-			initialiseGame(grid, maze, bears, bombs, pills, locks, rocks, level);	// reinitialise the game with the next level
-			paintGame(grid, message, playerName, scoreMove, rescued, previousScore, level, bears);	// update the next level's descriptions
+		endProgram(finishGame, bears);	//display final message
+		Clrscr();
+		mainMenu(moves, message, playerName, levelString, level, levelRecord, unlockMode, key);
+		// record the player's highest record after game completion
+		if ((scoreMove <= previousScore) && (finishGame == true) && (unlockMode == false) && (bears.empty())) {
+			recordPlayerTxt(playerName, levelString, scoreMove, level, levelRecord);
 		}
-	}
 
-	// record the player's highest record after game completion
-	if ((scoreMove <= previousScore) && (finishGame == true) && (unlockMode == false) && (bears.empty())) {
-		recordPlayerTxt(playerName, levelString, scoreMove, level, levelRecord);
-	}
-
-	endProgram(finishGame, bears);	//display final message
+		// save current playthrough
+		if (key == 4) {
+			saveGame(grid, playerName, level, scoreMove, rescued, onBomb, onWal);
+		}
+	} while (key != 4);
 	return 0;
 }
 
@@ -186,18 +214,18 @@ void entryScreen(string message, string& playerName) {
 
 	//display game title and bear image
 	showMessage(clDarkGrey, clGreen, 15, 2, "	   _      _                                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  ");
-	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /              MENU                /| ");
+	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /                                  /| ");
 	showMessage(clDarkGrey, clGreen, 15, 4, "   .'      `.      _..--'''       `-._     /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _/ | ");
 	showMessage(clDarkGrey, clGreen, 15, 5, "  :          :_.-''                  .`.   |                                 |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |     THREE  BEARS  GAME - FOP    |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |            GROUP RR             |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |       Greg, Andy and Irek       |  | ");
 	showMessage(clDarkGrey, clGreen, 15, 9, "    `._Y _.'               '           ;   |      Computer Science - 2017    | /  ");
-	showMessage(clDarkGrey, clGreen, 15, 10, "       'U'      .'          `.         ;   |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
-	showMessage(clDarkGrey, clGreen, 15, 11, "          `:   ;`-..___       `.     .'`.                    ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 12, "           :   :  :    ```'''''``.    `.  `.                 ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 13, "        .'     ;..'            .'       `.'`                 ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 14, "       `.......'              `........-'`                   ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 10, "      'U'      .'          `.         ;    |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
+	showMessage(clDarkGrey, clGreen, 15, 11, "         `:   ;`-..___       `.     .'`.                    ||                    ");
+	showMessage(clDarkGrey, clGreen, 15, 12, "          :   :  :    ```'''''``.    `.  `.                 ||                    ");
+	showMessage(clDarkGrey, clGreen, 15, 13, "       .'     ;..'            .'       `.'`                 ||                    ");
+	showMessage(clDarkGrey, clGreen, 15, 14, "      `.......'              `........-'`                   ||                    ");
 
 	showMessage(clBlack, clWhite, 55, 18, "______________________");
 
@@ -217,28 +245,22 @@ void levelSelection(string message, string playerName, string& levelString, int&
 
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
 	void readPlayerRecord(string, int&);
-	void hiddenLevels(int);
+	void reDrawBear();
+	void displayLevels(int);
 
 	// read the player's highest reached level
 	readPlayerRecord(playerName, levelRecord);
 
 	// display available levels and bear image
-	showMessage(clDarkGrey, clGreen, 15, 2, "	   _      _                                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  ");
-	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /              MENU                /| ");
-	showMessage(clDarkGrey, clGreen, 15, 4, "   .'      `.      _..--'''       `-._     /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _/ | ");
-	showMessage(clDarkGrey, clGreen, 15, 5, "  :          :_.-''                  .`.   |                                 |  | ");
-	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |       1. Maze with detonator    |  | ");
-	showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |                                 |  | ");
-	showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |                                 |  | ");
-	showMessage(clDarkGrey, clGreen, 15, 9, "    `._Y _.'               '           ;   |                                 | /  ");
-	showMessage(clDarkGrey, clGreen, 15, 10, "       'U'      .'          `.         ;   |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
-	showMessage(clDarkGrey, clGreen, 15, 11, "          `:   ;`-..___       `.     .'`.                    ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 12, "           :   :  :    ```'''''``.    `.  `.                 ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 13, "        .'     ;..'            .'       `.'`                 ||                   ");
-	showMessage(clDarkGrey, clGreen, 15, 14, "       `.......'              `........-'`                   ||                   ");
+	showMessage(clDarkGrey, clGreen, 59, 5, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 6, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 7, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 8, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 9, "                                ");
 
 	// display the level options if unlocked
-	hiddenLevels(levelRecord);
+	reDrawBear();
+	displayLevels(levelRecord);
 
 	showMessage(clBlack, clWhite, 40, 18, "Please select the desired level: ");
 	getline(cin, levelString);	// Read the level option
@@ -247,7 +269,7 @@ void levelSelection(string message, string playerName, string& levelString, int&
 	if (levelString == "u") {
 		unlockMode = true;	// prevent file recording
 		levelRecord = 3;	// unlock all levels in unlock mode
-		hiddenLevels(levelRecord);	// display all levels in unlock mode
+		displayLevels(levelRecord);	// display all levels in unlock mode
 		showMessage(clBlack, clWhite, 40, 19, "All levels unlocked. Choose a level.");
 		Beep(523, 200);		// Beep sounds when cheatmode activated
 		Beep(523, 200);		// Beep sounds when cheatmode activated
@@ -273,31 +295,41 @@ void levelSelection(string message, string playerName, string& levelString, int&
 //----- initialise game state
 //---------------------------------------------------------------------------
 
-void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, int level) {
+void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, string player, int& level, int& scoreMove, int& rescued, bool& onBomb, bool& onWal) {
 	//initialise grid & place bear in middle
+	void loadGame(string, vector<Item>& bears, char m[][SIZEX], int&, int&, int&, bool&, bool&);
 	void setInitialMazeStructure(char maze[][SIZEX]);
 	void setMazeStructureLevel2(char maze[][SIZEX]);
 	void setMazeStructureLevel3(char maze[][SIZEX]);
-	void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks);
-	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks, const vector<Item> rocks);
+	void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, bool, bool);
+	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks);
+	bool readSave(string);
 
-	// draw the maze dependent on the level count
-	switch (level)
+	if (readSave(player))
 	{
-	case 1:
-		setInitialMazeStructure(maze);		//initialise maze
-		break;
-	case 2:
-		setMazeStructureLevel2(maze);		//Level 2
-		break;
-	case 3:
-		setMazeStructureLevel3(maze);		//Level 3
-		break;
-	default:
-		break;
+		Clrscr();
+		loadGame(player, bears, maze, level, scoreMove, rescued, onBomb, onWal);
 	}
-	setInitialDataFromMaze(maze, bears, bombs, locks, rocks);	//initialise bear's position
-	updateGrid(grid, maze, bears, bombs, pills, locks, rocks);		//prepare grid
+	else {
+		// draw the maze dependent on the level count
+		switch (level)
+		{
+		case 1:
+			setInitialMazeStructure(maze);		//initialise maze
+			break;
+		case 2:
+			setMazeStructureLevel2(maze);		//Level 2
+			break;
+		case 3:
+			setMazeStructureLevel3(maze);		//Level 3
+			break;
+		default:
+			break;
+		}
+	}
+
+	setInitialDataFromMaze(maze, bears, bombs, locks, onBomb, onWal);	//initialise bear's position
+	updateGrid(grid, maze, bears, bombs, pills, locks);		//prepare grid
 }
 
 void setInitialMazeStructure(char maze[][SIZEX]) {
@@ -338,9 +370,9 @@ void setMazeStructureLevel2(char maze[][SIZEX]) {
 	//initialise maze configuration
 	int maze2[SIZEY][SIZEX] 	//local array to store the maze structure
 	= { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
-		{ 1, 2, 3, 5, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 1 },
-		{ 1, 2, 1, 0, 1, 1, 1, 1, 3, 1, 4, 1, 0, 1, 0, 1 },
-		{ 1, 2, 1, 0, 1, 6, 0, 0, 0, 3, 0, 1, 0, 1, 0, 1 },
+		{ 1, 2, 3, 7, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 1 },
+		{ 1, 2, 1, 0, 1, 1, 1, 1, 3, 1, 6, 1, 0, 1, 0, 1 },
+		{ 1, 2, 1, 0, 1, 5, 0, 0, 0, 3, 0, 1, 0, 1, 0, 1 },
 		{ 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1 },
 		{ 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1 },
 		{ 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1 },
@@ -359,9 +391,9 @@ void setMazeStructureLevel2(char maze[][SIZEX]) {
 			case 1: maze[row][col] = WALL; break;
 			case 2: maze[row][col] = BEAR; break;
 			case 3: maze[row][col] = BOMB; break;
-			case 4: maze[row][col] = LOCK; break;
-			case 5:	maze[row][col] = KEY; break;
-			case 6: maze[row][col] = EXIT; break;
+			case 5: maze[row][col] = EXIT; break;
+			case 6: maze[row][col] = LOCK; break;
+			case 7:	maze[row][col] = KEY; break;
 			}
 		}
 	}
@@ -371,17 +403,17 @@ void setMazeStructureLevel3(char maze[][SIZEX]) {
 	//set the position of the walls in the maze
 	//initialise maze configuration
 	int maze3[SIZEY][SIZEX] 	//local array to store the maze structure
-	= { { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
-		{ 1, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 0, 1 },
-		{ 1, 2, 4, 0, 0, 0, 0, 0, 4, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 2, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 0, 4, 4, 4, 4, 0, 0, 0, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 0, 4, 0, 0, 0, 0, 4, 0, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 0, 4, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 0, 4, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 4, 0, 1 },
-		{ 1, 0, 4, 4, 0, 4, 0, 4, 0, 0, 0, 4, 4, 4, 3, 1 },
-		{ 1, 0, 4, 0, 0, 0, 0, 4, 0, 0, 0, 4, 4, 4, 5, 1 },
-		{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 }, };
+	= { { 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1, 1 },
+		{ 1, 2, 0, 0, 0, 3, 0,  0, 0, 9, 0, 0, 0, 0, 0, 1 },
+		{ 1, 2, 9, 0, 9, 9, 0,  9, 0, 9, 0, 3, 3, 3, 0, 1 },
+		{ 1, 2, 9, 0, 0, 0, 0,  9, 0, 9, 0, 3, 5, 3, 0, 1 },
+		{ 1, 0, 9, 3, 9, 9, 9,  9, 0, 9, 0, 3, 3, 3, 0, 1 },
+		{ 1, 0, 0, 0, 0, 0, 0,  3, 0, 0, 0, 0, 9, 0, 0, 1 },
+		{ 1, 9, 0, 9, 9, 9, 9,  9, 9, 9, 0, 9, 9, 9, 0, 1 },
+		{ 1, 0, 0, 0, 9, 4, 9, 10, 0, 9, 0, 9, 8, 9, 0, 1 },
+		{ 1, 3, 9, 0, 9, 9, 9,  9, 6, 9, 0, 9, 6, 9, 0, 1 },
+		{ 1, 7, 0, 0, 9, 3, 0,  0, 0, 0, 0, 3, 0, 0, 0, 1 },
+		{ 1, 1, 1, 1, 1, 1, 1,  1, 1, 1, 1, 1, 1, 1, 1, 1 }, };
 
 	// with 1 for wall, 0 for tunnel, etc. 
 	//copy into maze structure
@@ -393,14 +425,19 @@ void setMazeStructureLevel3(char maze[][SIZEX]) {
 			case 1: maze[row][col] = WALL; break;
 			case 2: maze[row][col] = BEAR; break;
 			case 3: maze[row][col] = BOMB; break;
-			case 4: maze[row][col] = ROCK; break;
-			case 5:	maze[row][col] = EXIT; break;
+			case 4: maze[row][col] = DETONATOR; break;
+			case 5: maze[row][col] = EXIT; break;
+			case 6: maze[row][col] = LOCK; break;
+			case 7:	maze[row][col] = KEY; break;
+			case 8:	maze[row][col] = DRILL; break;
+			case 9:	maze[row][col] = WAL; break;
+			case 10: maze[row][col] = PILL; break;
 			}
 		}
 	}
 }
 
-void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, vector<Item>& rocks) {
+void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item>& bombs, vector<Item>& locks, bool onBomb, bool onWal) {
 	//extract bear's coordinates from initial maze info
 	for (int row(0); row < SIZEY; ++row) {
 		for (int col(0); col < SIZEX; ++col) {
@@ -408,9 +445,33 @@ void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item
 			{
 				case BEAR:
 				{
-					Item bear = { col, row, BEAR, false };
+					Item bear = { col, row, BEAR, false, false };
 					bears.push_back(bear);
 					maze[row][col] = TUNNEL;
+					break;
+				}
+				case PROTECTEDBEAR:
+				{
+					Item bear = { col, row, PROTECTEDBEAR, true, false };
+					bears.push_back(bear);
+					if (onBomb != true) {
+						maze[row][col] = TUNNEL;
+					}
+					else {
+						maze[row][col] = BOMB;
+					}
+					break;
+				}
+				case DRILLBEAR:
+				{
+					Item bear = { col, row, DRILLBEAR, false, true };
+					bears.push_back(bear);
+					if (onWal != true) {
+						maze[row][col] = TUNNEL;
+					}
+					else {
+						maze[row][col] = WAL;
+					}
 					break;
 				}
 				case BOMB:
@@ -427,13 +488,6 @@ void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item
 					maze[row][col] = TUNNEL;
 					break;
 				}
-				case ROCK:
-				{
-					const Item rock = { col, row, ROCK };
-					rocks.push_back(rock);
-					maze[row][col] = TUNNEL;
-					break;
-				}
 				default:
 					break;
 					//will work for other bombs too
@@ -446,18 +500,14 @@ void setInitialDataFromMaze(char maze[][SIZEX], vector<Item>& bears, vector<Item
 //----- update grid state
 //---------------------------------------------------------------------------
 
-void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks, const vector<Item> rocks) {
+void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const vector<Item> bears, const vector<Item> bombs, const vector<Item> pills, const vector<Item> locks) {
 	//update grid configuration after each move
 	void setMaze(char g[][SIZEX], const char b[][SIZEX]);
-	void placeBombs(char g[][SIZEX], const vector<Item>& bombs, const vector<Item>& pills);
-	void placeLocks(char g[][SIZEX], const vector<Item>& locks);
-	void placeRocks(char g[][SIZEX], const vector<Item>& rocks);
+	void placeItems(char g[][SIZEX], const vector<Item>& bombs, const vector<Item>& locks, const vector<Item>& pills);
 	void placeBears(char g[][SIZEX], const vector<Item>& bears);
 
 	setMaze(grid, maze);	//reset the empty maze configuration into grid
-	placeBombs(grid, bombs, pills);	// set bombs in grid - remove them if they're deleted
-	placeLocks(grid, locks);	// set lock in grid - remove it if deleted
-	placeRocks(grid, rocks);	// set rocks in grid
+	placeItems(grid, bombs, locks, pills);	// set bombs in grid - remove them if they're deleted
 	placeBears(grid, bears);	// set bears in grid
 }
 
@@ -477,10 +527,15 @@ void placeBears(char grid[][SIZEX], const vector<Item>& bears) {
 	}
 }
 
-void placeBombs(char grid[][SIZEX], const vector<Item>& bombs, const vector<Item>& pills) {
+void placeItems(char grid[][SIZEX], const vector<Item>& bombs, const vector<Item>& locks,  const vector<Item>& pills) {
 	for (size_t pos(0); pos < bombs.size(); ++pos)
 	{
 		grid[bombs.at(pos).y][bombs.at(pos).x] = bombs.at(pos).symbol;
+	}
+
+	for (size_t pos(0); pos < locks.size(); ++pos)
+	{
+		grid[locks.at(pos).y][locks.at(pos).x] = locks.at(pos).symbol;
 	}
 
 	for (size_t pos(0); pos < pills.size(); ++pos)
@@ -490,24 +545,10 @@ void placeBombs(char grid[][SIZEX], const vector<Item>& bombs, const vector<Item
 	}
 }
 
-void placeLocks(char grid[][SIZEX], const vector<Item>& locks) {
-	for (size_t pos(0); pos < locks.size(); ++pos)
-	{
-		grid[locks.at(pos).y][locks.at(pos).x] = locks.at(pos).symbol;
-	}
-}
-
-void placeRocks(char grid[][SIZEX], const vector<Item>& rocks) {
-	for (size_t pos(0); pos < rocks.size(); ++pos)
-	{
-		grid[rocks.at(pos).y][rocks.at(pos).x] = rocks.at(pos).symbol;
-	}
-}
-
 //---------------------------------------------------------------------------
 //----- move the bear
 //---------------------------------------------------------------------------
-void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, vector<Item>& rocks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool cheatMode, int& rescued, int level) {
+void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>& bears, vector<Item>& bombs, vector<Item>& pills, vector<Item>& locks, const int key, string& mess, bool& finishGame, bool& levelCompleted, bool& onBomb, bool& onWal, bool cheatMode, int& rescued, int level, bool& drillMode) {
 	//move bear in required direction
 	bool isArrowKey(const int k);
 	void setKeyDirection(int k, int& dx, int& dy);
@@ -517,10 +558,9 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 
 	//calculate direction of movement for given key
 	int dx(0), dy(0);
-	bool steppedOnBomb = false;
 	setKeyDirection(key, dx, dy);
 
-	if (moves % 10 == 0){
+	if ((moves % 10 == 0) && (level != 3)){
 		pills.clear();
 		createThePill(g, moves, pills);
 		moves = 0;
@@ -533,10 +573,22 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 			case TUNNEL:		//can move
 				bears.at(pos).y += dy;	//go in that Y direction
 				bears.at(pos).x += dx;	//go in that X direction
+				onBomb = false;
+				onWal = false;
 				mess = "                                     ";
 				break;
 			case WALL:  		//hit a wall and stay there
-				cout << '\a';	//beep the alarm - Disabled as the alarm is annoying
+				//cout << '\a';	//beep the alarm - Disabled as the alarm is annoying
+				break;
+			case WAL:
+				if (bears.at(pos).drillMode != true) {
+					onWal = true;
+					cout << '\a';
+				}
+				else {
+					bears.at(pos).y += dy;	//go in that Y direction
+					bears.at(pos).x += dx;	//go in that X direction
+				}
 				break;
 			case BEAR:
 				bears.at(pos).y += 0;	//go in that Y direction
@@ -546,7 +598,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				if (!cheatMode && !bears.at(pos).isProtected) {
 					cout << '\a';		//beep the alarm
 					mess = "BEAR DIES!                           ";
-					steppedOnBomb = true;
+					onBomb = true;
 					bears.at(pos).symbol = ' ';
 					finishGame = true;
 					break;
@@ -571,18 +623,19 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 				locks.clear();
 				mess = "LOCK REMOVED!        ";	//set 'Invalid key' message
 				break;
-			case ROCK:
-				//bears.at(pos).y += dy;	//go in that Y direction
-				//bears.at(pos).x += dx;	//go in that X direction	
-				rocks.at(pos).y += dy;	//go in that Y direction
-				rocks.at(pos).x += dx;	//go in that X direction
-				mess = "                                     ";
 			case PILL:
 				bears.at(pos).isProtected = true;
 				bears.at(pos).y += dy;
 				bears.at(pos).x += dx;
 				bears.at(pos).symbol = PROTECTEDBEAR;
 				pills.clear();
+				break;
+			case DRILL:
+				bears.at(pos).drillMode = true;
+				bears.at(pos).y += dy;	//go in that Y direction
+				bears.at(pos).x += dx;	//go in that X direction
+				bears.at(pos).symbol = DRILLBEAR;
+				mess = "DRILL MODE ACTIVATED!                ";
 				break;
 			case EXIT:
 				cout << '\a';		//beep the alarm
@@ -601,7 +654,7 @@ void updateGameData(char g[][SIZEX], char maze[][SIZEX], int moves, vector<Item>
 					}
 				}
 		}
-		updateGrid(g, maze, bears, bombs, pills, locks, rocks);
+		updateGrid(g, maze, bears, bombs, pills, locks);
 	}
 }
 
@@ -677,6 +730,16 @@ bool enableCheatMode(const int key) {
 	return toupper(key) == CHEAT;
 }
 
+bool displayRules(const int key) {
+	// Checks if user has enabled cheat mode (disable bombs)
+	return toupper(key) == RULES;
+}
+
+bool goBack(const int key) {
+	// Checks if user has enabled cheat mode (disable bombs)
+	return toupper(key) == BACK;
+}
+
 //---------------------------------------------------------------------------
 //----- display info on screen
 //---------------------------------------------------------------------------
@@ -694,7 +757,6 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string message);
 	void paintGrid(const char g[][SIZEX], const vector<Item>& bears);
 	void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears);
-
 
 	// retrieve current time and date.
 	auto t = time(nullptr);
@@ -748,58 +810,49 @@ void paintGame(const char g[][SIZEX], string mess, string playerName, int scoreM
 	showMessage(clBlack, clWhite, 40, 6, "BEARS OUT: ");
 	cout << rescued;
 
-	// display level descriptions
-	switch (level)
-	{
-	case 1:
-		showMessage(clDarkGrey, clWhite, 40, 13, " GAME LEVEL 1 RULES                  ");
-		showMessage(clDarkGrey, clWhite, 40, 16, " To disable bombs use detonator 'T'  ");
-		break;
-	case 2:
-		showMessage(clDarkGrey, clWhite, 40, 13, " GAME LEVEL 2 RULES                  ");
-		showMessage(clDarkGrey, clWhite, 40, 16, " To remove the lock use key 'F'      ");
-		break;
-	case 3:
-		showMessage(clDarkGrey, clWhite, 40, 13, " GAME LEVEL 3 RULES                  ");
-		showMessage(clDarkGrey, clWhite, 40, 16, " Move rock 'Q' to reach the exit     ");
-		break;
-	}
-	showMessage(clDarkGrey, clWhite, 40, 14, " Rescue all the bears '@' through    ");
-	showMessage(clDarkGrey, clWhite, 40, 15, " exit 'X' avoiding bombs 'O'         ");
-	showMessage(clDarkGrey, clWhite, 40, 17, "                                     ");
-	showMessage(clDarkGrey, clWhite, 40, 18, " TO MOVE USE KEYBOARD ARROWS         ");
-	showMessage(clDarkGrey, clWhite, 40, 19, " TO QUIT ENTER 'Q'                   ");
+	//Print current level
+	string currentLevelDisplay = "Current level: " + to_string(level);
+	showMessage(clDarkGrey, clWhite, 40, 4, currentLevelDisplay);
 
 	// print auxiliary messages if any
 	showMessage(clBlack, clWhite, 40, 8, mess);	//display current message
 
 	// display grid contents
-	paintGrid(g, bears);
+	if (level > 2) {
+		reduceVisibility(g, bears);
+	}
+	else {
+		paintGrid(g, bears);
+	}
 
 	//´symbol description
-	showMessage(clDarkGrey, clWhite, 0, 16, "BEAR         ");
-	showMessage(clDarkGrey, clGreen, 10, 16, "@     ");
-	showMessage(clDarkGrey, clWhite, 0, 17, "BOMB          ");
-	showMessage(clDarkGrey, clRed, 10, 17, "0     ");
-	showMessage(clDarkGrey, clWhite, 0, 18, "DETONATOR      ");
-	showMessage(clDarkGrey, clYellow, 10, 18, "T     ");
-	showMessage(clDarkGrey, clWhite, 0, 19, "EXIT         ");
-	showMessage(clDarkGrey, clBlack, 10, 19, "X     ");
+	showMessage(clBlack, clWhite, 0, 16, "BEAR         ");
+	showMessage(clBlack, clGreen, 10, 16, "@     ");
+	showMessage(clBlack, clWhite, 0, 17, "BOMB          ");
+	showMessage(clBlack, clRed, 10, 17, "0     ");
+	showMessage(clBlack, clWhite, 0, 18, "DETONATOR      ");
+	showMessage(clBlack, clYellow, 10, 18, "T     ");
+	showMessage(clBlack, clWhite, 0, 19, "EXIT         ");
+	showMessage(clBlack, clBlack, 10, 19, "X     ");
 	if (level == 2) {
-		showMessage(clDarkGrey, clWhite, 0, 18, "KEY            ");
-		showMessage(clDarkGrey, clCyan, 10, 18, "F     ");
-		showMessage(clDarkGrey, clWhite, 0, 19, "LOCK         ");
-		showMessage(clDarkGrey, clCyan, 10, 19, "&     ");
-		showMessage(clDarkGrey, clWhite, 0, 20, "EXIT         ");
-		showMessage(clDarkGrey, clBlack, 10, 20, "X     ");
+		showMessage(clBlack, clWhite, 0, 18, "KEY            ");
+		showMessage(clBlack, clCyan, 10, 18, "F     ");
+		showMessage(clBlack, clWhite, 0, 19, "LOCK         ");
+		showMessage(clBlack, clCyan, 10, 19, "&     ");
+		showMessage(clBlack, clWhite, 0, 20, "EXIT         ");
+		showMessage(clBlack, clBlack, 10, 20, "X     ");
 	}
 	else if (level == 3) {
-		showMessage(clDarkGrey, clWhite, 0, 18, "ROCK           ");
-		showMessage(clDarkGrey, clMagenta, 10, 18, "Q     ");
-		showMessage(clDarkGrey, clWhite, 0, 19, "EXIT         ");
-		showMessage(clDarkGrey, clBlack, 10, 19, "X     ");
-		showMessage(clBlack, clBlack, 0, 20, "             ");
-		showMessage(clBlack, clBlack, 10, 20, "      ");
+		showMessage(clBlack, clWhite, 0, 19, "KEY            ");
+		showMessage(clBlack, clCyan, 10, 19, "F     ");
+		showMessage(clBlack, clWhite, 0, 20, "LOCK         ");
+		showMessage(clBlack, clCyan, 10, 20, "&     ");
+		showMessage(clBlack, clWhite, 0, 21, "DRILL          ");
+		showMessage(clBlack, clMagenta, 10, 21, "D     ");
+		showMessage(clBlack, clWhite, 0, 22, "PILL         ");
+		showMessage(clBlack, clCyan, 10, 22, "P     ");
+		showMessage(clBlack, clWhite, 0, 23, "EXIT         ");
+		showMessage(clBlack, clBlack, 10, 23, "X     ");
 	}
 }
 
@@ -834,6 +887,11 @@ void paintGrid(const char g[][SIZEX], const vector<Item>& bears) {
 				resetColor();			// Reset the colour back to white
 				break;
 			}
+			case DRILLBEAR:
+				setColor(13);			// Paint the Bear magenta
+				cout << BEAR;
+				resetColor();			// Reset the colour back to white
+				break;
 			case PROTECTEDBEAR:
 				setColor(2);
 				cout << BEAR;
@@ -860,21 +918,21 @@ void paintGrid(const char g[][SIZEX], const vector<Item>& bears) {
 				break;
 			case LOCK:
 			{
-				setColor(11);			// Paint the Detonator cyan
+				setColor(11);			// Paint the Lock cyan
 				cout << g[row][col];
 				resetColor();			// Reset the colour back to white
 				break;
 			}
 			case KEY:
 			{
-				setColor(11);			// Paint the Detonator blue
+				setColor(11);			// Paint the Key cyan
 				cout << g[row][col];
 				resetColor();			// Reset the colour back to white
 				break;
 			}
-			case ROCK:
+			case DRILL:
 			{
-				setColor(13);			// Paint the Rocks magenta
+				setColor(13);			// Paint the Drill magenta
 				cout << g[row][col];
 				resetColor();			// Reset the colour back to white
 				break;
@@ -935,6 +993,16 @@ void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears) {
 					resetColor();			// Reset the colour back to white
 					break;
 				}
+				case DRILLBEAR:
+					setColor(13);			// Paint the Bear magenta
+					cout << BEAR;
+					resetColor();			// Reset the colour back to white
+					break;
+				case PROTECTEDBEAR:
+					setColor(2);
+					cout << BEAR;
+					resetColor();
+					break;
 				case BOMB:
 				{
 					setColor(12);			// Paint the Bomb red
@@ -945,6 +1013,32 @@ void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears) {
 				case DETONATOR:
 				{
 					setColor(14);			// Paint the Detonator yellow
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case PILL:
+					setColor(11);
+					cout << g[row][col];
+					resetColor();
+					break;
+				case LOCK:
+				{
+					setColor(11);			// Paint the Lock cyan
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case KEY:
+				{
+					setColor(11);			// Paint the Key cyan
+					cout << g[row][col];
+					resetColor();			// Reset the colour back to white
+					break;
+				}
+				case DRILL:
+				{
+					setColor(13);			// Paint the Drill magenta
 					cout << g[row][col];
 					resetColor();			// Reset the colour back to white
 					break;
@@ -961,7 +1055,7 @@ void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears) {
 			}
 			else
 			{
-				setColor(1);
+				setColor(0);
 				cout << g[row][col];
 				resetColor();
 			}
@@ -971,14 +1065,222 @@ void reduceVisibility(const char g[][SIZEX], const vector<Item>& bears) {
 	}
 }
 
-void hiddenLevels(int levelRecord) {
+void displayLevels(int levelRecord) {
+	showMessage(clDarkGrey, clGreen, 59, 6, "  1.  Maze with detonator       ");
 	if (levelRecord > 1) {
-		showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |  2 - Maze with lock and key     |  | ");
+		showMessage(clDarkGrey, clGreen, 59, 7, "  2.  Maze with lock and key    ");
 		if (levelRecord > 2) {
-			showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |  3 - Maze with slidable rocks   |  | ");
+			showMessage(clDarkGrey, clGreen, 59, 8, "  3.  Maze with short visibility");
+			if (levelRecord > 3) {
+				showMessage(clDarkGrey, clGreen, 59, 9, "  4.  Maze with drill           ");
+			}
 		}
 	}
 }
+
+bool readSave(string player) {
+	ifstream loadProgress;
+	loadProgress.open(player + "_saveGame.txt", ios::in);
+	if (loadProgress.fail())
+		return false;
+	else {
+		return true;
+	}
+}
+
+void floatRules(int level) {
+
+	int getKeyPress();
+
+	showMessage(clDarkBlue, clGreen, 7, 2, "      _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _    ");
+	showMessage(clDarkBlue, clGreen, 7, 3, "     /          Rules of the game           /|   ");
+	showMessage(clDarkBlue, clGreen, 7, 4, "    /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _ _ _/ |   ");
+	showMessage(clDarkBlue, clGreen, 7, 5, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 6, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 7, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 8, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 9, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 10, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 11, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 12, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 13, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 14, "    |                                     |  |   ");
+	showMessage(clDarkBlue, clGreen, 7, 15, "    |                                     | /    ");
+	showMessage(clDarkBlue, clGreen, 7, 16, "    |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/     ");
+	showMessage(clDarkBlue, clGreen, 7, 17, "                        ||                       ");
+	showMessage(clDarkBlue, clGreen, 7, 18, "                        ||                       ");
+	showMessage(clDarkBlue, clGreen, 7, 19, "                        ||                       ");
+	showMessage(clDarkBlue, clGreen, 7, 20, "                        ||                       ");
+
+	// display level descriptions
+	switch (level)
+	{
+	case 1:
+		showMessage(clDarkBlue, clWhite, 13, 5, "          LEVEL 1 RULES:");
+		showMessage(clDarkBlue, clWhite, 13, 7, " To disable bombs use detonator 'T'");
+		break;
+	case 2:
+		showMessage(clDarkBlue, clWhite, 13, 5, "          LEVEL 2 RULES:");
+		showMessage(clDarkBlue, clWhite, 13, 7, " To remove the lock use key 'F'");
+		break;
+	case 3:
+		showMessage(clDarkBlue, clWhite, 13, 5, "          LEVEL 3 RULES: ");
+		showMessage(clDarkBlue, clWhite, 13, 7, " Move rock 'O' to reach the exit ");
+		break;
+	}
+	showMessage(clDarkBlue, clWhite, 13, 9, " Rescue all the bears '@' through");
+	showMessage(clDarkBlue, clWhite, 13, 10, " exit 'X' avoiding bombs '0'");
+	showMessage(clDarkBlue, clWhite, 13, 12, " TO MOVE USE KEYBOARD ARROWS");
+	showMessage(clDarkBlue, clWhite, 13, 13, " TO QUIT ENTER 'Q'");
+
+	showMessage(clDarkBlue, clWhite, 13, 15, " Press 'R' to close window");
+
+	int key(getKeyPress());
+
+	while (!displayRules(key)) {
+		key = getKeyPress();
+	}
+
+	showMessage(clBlack, clGreen, 7, 2, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 3, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 4, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 5, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 6, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 7, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 8, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 9, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 10, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 11, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 12, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 13, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 14, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 15, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 16, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 17, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 18, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 19, "                                                 ");
+	showMessage(clBlack, clGreen, 7, 20, "                                                 ");
+}
+
+void clearSign() {
+	showMessage(clDarkGrey, clGreen, 59, 5, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 6, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 7, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 8, "                                ");
+	showMessage(clDarkGrey, clGreen, 59, 9, "                                ");
+}
+
+void mainMenu(int moves, string message, string playerName, string& levelString, int& level, int& levelRecord, bool& unlockMode, int& selection) {
+	char testselection;
+	do {
+		void levelSelection(string message, string playerName, string& levelString, int& level, int& levelRecord, bool& unlockMode);
+		void translateASCII(char& num);
+		void reDrawBear();
+		void readScoreTxt(string, string, int&);
+
+		reDrawBear();
+		
+		if (moves > 0) {
+			showMessage(clDarkGrey, clGreen, 59, 6, "     1. Continue game           ");
+		}
+		else {
+			showMessage(clDarkGrey, clGreen, 59, 6, "     1. Start game              ");
+		}
+		showMessage(clDarkGrey, clGreen, 59, 7, "     2. See rules               ");
+		showMessage(clDarkGrey, clGreen, 59, 8, "     3. See previous scores     ");
+		showMessage(clDarkGrey, clGreen, 59, 9, "     4. Quit the game           ");
+
+		showMessage(clBlack, clWhite, 40, 18, "                                                                                                         ");
+		showMessage(clBlack, clWhite, 40, 18, "Choose an option: ");
+
+		cin >> testselection;
+
+		translateASCII(testselection);
+		selection = static_cast<int>(testselection);
+		switch (testselection) {
+		case 1:
+			if (moves > 0) {
+				//Resume game
+				system("CLS");
+			}
+			else {
+				levelSelection(message, playerName, levelString, level, levelRecord, unlockMode);
+			}
+			break;
+		case 2:
+		{
+			char num;
+
+			do {
+				//Ask which level to display rules for
+				reDrawBear();
+				clearSign();
+
+				showMessage(clDarkGrey, clGreen, 61, 3, " Select the level to see rules: ");
+				showMessage(clDarkGrey, clGreen, 59, 6, " 1.  Maze with detonator        ");
+				showMessage(clDarkGrey, clGreen, 59, 7, " 2.  Maze with lock and key     ");
+				showMessage(clDarkGrey, clGreen, 59, 8, " 3.  Maze with short visibility ");
+				showMessage(clDarkGrey, clGreen, 59, 9, " 4.  Maze with drill            ");
+				showMessage(clBlack, clWhite, 40, 20, "Press 'B' to go back                    ");
+
+				showMessage(clBlack, clWhite, 41, 18, "                                       ");
+
+				showMessage(clBlack, clWhite, 40, 18, "                                                                                                         ");
+				showMessage(clBlack, clWhite, 40, 18, "Choose an option: ");
+
+
+				cin >> num;
+
+				while (((num < '1') || (num > '4')) && ((num != 'B') && (num != 'b'))) {
+					showMessage(clBlack, clWhite, 40, 18, "                                                 ");
+					showMessage(clRed, clYellow, 58, 17, "INVALID COMMAND");
+					showMessage(clBlack, clWhite, 40, 18, "                                                                                                         ");
+					showMessage(clBlack, clWhite, 40, 18, "Choose an option: ");
+					cin >> num;
+				}
+				if ((num != 'B') && (num != 'b')) {
+					translateASCII(num);
+					floatRules((int)num);
+				}
+				else {
+
+				}
+
+			} while ((num != 'B') && (num != 'b'));
+			break;
+		}
+		case 3:
+		{
+			clearSign();
+			showMessage(clDarkGrey, clGreen, 61, 3, "        Previous scores:        ");
+			showMessage(clDarkGrey, clGreen, 59, 6, "   Level 1:                  ");
+			showMessage(clDarkGrey, clGreen, 59, 7, "   Level 2:                  ");
+			showMessage(clDarkGrey, clGreen, 59, 8, "   Level 3:                  ");
+			showMessage(clDarkGrey, clGreen, 59, 9, "   Level 4:                  ");
+			showMessage(clBlack, clWhite, 40, 20, "Press 'B' to go back                    ");
+			showMessage(clBlack, clWhite, 40, 18, "                                                                     ");
+
+			int previousScore = 0;
+			int levelCounter = 1;
+			for (int i = 6; i <= 9; i++) {
+				string levelString = to_string(levelCounter);
+				readScoreTxt(playerName, levelString, previousScore);
+				showMessage(clDarkGrey, clGreen, 72, i, to_string(previousScore));
+				levelCounter++;
+			}
+			int key(getKeyPress());
+
+			while (!goBack(key)) {
+				key = getKeyPress();
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	} while ((selection != 1) && (selection != 4));
+}
+
 
 void readScoreTxt(string playerName, string level, int& previousScore) {
 	ifstream fin;
@@ -1004,12 +1306,159 @@ void recordPlayerTxt(string playerName, string levelString, int scoreMove, int l
 	}
 }
 
+void saveGame(char g[][SIZEX], string playerName, int level, int score, int rescued, bool onBomb, bool onWal) {
+	ofstream saveProgress(playerName + "_saveGame.txt", ios::out);
+	saveProgress << level << endl;
+	saveProgress << score << endl;
+	saveProgress << rescued << endl;
+	saveProgress << onBomb << endl;
+	saveProgress << onWal << endl;
+	for (int row = 0; row < SIZEY; row++) {
+		for (int col = 0; col < SIZEX; col++) {
+			switch (g[row][col])
+			{
+			case TUNNEL:
+				saveProgress << 0;
+				break;
+			case WALL:
+				saveProgress << 1;
+				break;
+			case BEAR:
+				saveProgress << 2;
+				break;
+			case PROTECTEDBEAR:
+				saveProgress << 21;
+				break;
+			case DRILLBEAR:
+				saveProgress << 22;
+				break;
+			case BOMB:
+				saveProgress << 3;
+				break;
+			case DETONATOR:
+				saveProgress << 4;
+				break;
+			case EXIT:
+				saveProgress << 5;
+				break;
+			case LOCK:
+				saveProgress << 6;
+				break;
+			case KEY:
+				saveProgress << 7;
+				break;
+			case DRILL:
+				saveProgress << 8;
+				break;
+			case WAL:
+				saveProgress << 9;
+				break;
+			case PILL:
+				saveProgress << 10;
+				break;
+			default:
+				break;
+			}
+			saveProgress << " ";
+		}
+		saveProgress << endl;
+	}
+}
+
+void loadGame(string player, vector<Item>& bears, char m[][SIZEX], int& level, int& score, int& rescued, bool& onBomb, bool& onWal) {
+	ifstream loadProgress;
+	int savedMaze[SIZEY][SIZEX];
+	loadProgress.open(player + "_saveGame.txt", ios::in);
+	loadProgress >> level;
+	loadProgress >> score;
+	loadProgress >> rescued;
+	loadProgress >> onBomb;
+	loadProgress >> onWal;
+	for (int row = 0; row < SIZEY; row++) {
+		for (int col = 0; col < SIZEX; col++) {
+			loadProgress >> savedMaze[row][col];
+		}
+	}
+
+	loadProgress.close();
+	
+	// delete the save file after reading it straightaway to prevent reloading after game completion
+	if (remove((player + "_saveGame.txt").c_str()) != 0) {
+		cout << endl;
+		perror("Error deleting file");
+	}
+	else {
+		cout << endl;
+		puts("Previous ingame progress loaded");
+	}
+
+	for (int row(0); row < SIZEY; ++row) {
+		for (int col(0); col < SIZEX; ++col) {
+			switch (savedMaze[row][col])
+			{
+			case 0: m[row][col] = TUNNEL; break;
+			case 1: m[row][col] = WALL; break;
+			case 2: m[row][col] = BEAR; break;
+			case 21:
+				m[row][col] = PROTECTEDBEAR;
+				break;
+			case 22:
+				m[row][col] = DRILLBEAR;
+				break;
+			case 3: m[row][col] = BOMB; break;
+			case 4: m[row][col] = DETONATOR; break;
+			case 5: m[row][col] = EXIT; break;
+			case 6: m[row][col] = LOCK; break;
+			case 7:	m[row][col] = KEY; break;
+			case 8:	m[row][col] = DRILL; break;
+			case 9: m[row][col] = WAL; break;
+			case 10: m[row][col] = PILL; break;
+			}
+		}
+	}
+}
+
 void resetStats(vector<Item>& bombs, vector<Item>& locks, int& scoreMove, int& rescued) {
 	bombs.clear();	// remove residual bombs available on previous level for the next one
 	locks.clear();	// remove residual locks available on previous level for the next one
 	showMessage(clBlack, clWhite, 40, 5, "                   ");	// reset score count
 	scoreMove = 0;	// reset score count
 	rescued = 0;	// reset number of bears rescued (vital for bears movement)
+}
+
+//Translate the number input
+void translateASCII(char& num) {
+	switch (num) {
+	case 49:
+		num = 1;
+		break;
+	case 50:
+		num = 2;
+		break;
+	case 51:
+		num = 3;
+		break;
+	case 52:
+		num = 4;
+		break;
+	}
+}
+
+void reDrawBear() {
+	showMessage(clDarkGrey, clGreen, 15, 2, "	   _      _                                 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _  ");
+	showMessage(clDarkGrey, clGreen, 15, 3, "   : `.--.' ;              _....,_          /              MENU                /| ");
+	showMessage(clDarkGrey, clGreen, 15, 4, "   .'      `.      _..--'''       `-._     /_ _ _ _ _ _ _ _  _ _ _ _ _ _ _ _ _/ | ");
+	showMessage(clDarkGrey, clGreen, 15, 5, "  :          :_.-''                  .`.   |                                 |  | ");
+	showMessage(clDarkGrey, clGreen, 15, 6, "  :  6    6  :                     :  '.;  |                                 |  | ");
+	showMessage(clDarkGrey, clGreen, 15, 7, "  :          :                      `..';  |                                 |  | ");
+	showMessage(clDarkGrey, clGreen, 15, 8, "  `: .----. :'                          ;  |                                 |  | ");
+	showMessage(clDarkGrey, clGreen, 15, 9, "    `._Y _.'               '           ;   |                                 | /  ");
+	showMessage(clDarkGrey, clGreen, 15, 10, "       'U'      .'          `.         ;   |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _|/   ");
+	showMessage(clDarkGrey, clGreen, 15, 11, "          `:   ;`-..___       `.     .'`.                    ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 12, "           :   :  :    ```'''''``.    `.  `.                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 13, "        .'     ;..'            .'       `.'`                 ||                   ");
+	showMessage(clDarkGrey, clGreen, 15, 14, "       `.......'              `........-'`                   ||                   ");
+	showMessage(clBlack, clWhite, 40, 20, "                                            ");
 }
 
 void endLevel(string level) {
@@ -1046,7 +1495,6 @@ void setColor(int colour) {
 void resetColor() {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 }
-
 
 // This function rearranges the position of bears inside the vector
 // Based on which key is pressed for the movement
